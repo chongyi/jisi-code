@@ -58,6 +58,7 @@ macro_rules! define_id_type {
 define_id_type!(UserId);
 define_id_type!(ProblemId);
 define_id_type!(SubmissionId);
+define_id_type!(MailId);
 
 #[cfg(test)]
 mod tests {
