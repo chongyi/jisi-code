@@ -1,4 +1,6 @@
 mod db;
+pub mod entity;
+pub mod repository;
 
 use axum::{Json, Router, routing::get};
 use jisi_code_api_types::HealthCheckResponse;
