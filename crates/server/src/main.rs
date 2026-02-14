@@ -1,4 +1,5 @@
-use axum::{Router, routing::get};
+use axum::{Json, Router, routing::get};
+use jisi_code_api_types::HealthCheckResponse;
 use std::net::SocketAddr;
 use tracing::info;
 
@@ -21,6 +22,6 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn health() -> &'static str {
-    "ok"
+async fn health() -> Json<HealthCheckResponse> {
+    Json(HealthCheckResponse::ok())
 }

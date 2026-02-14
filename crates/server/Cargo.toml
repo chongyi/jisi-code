@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+jisi-code-api-types = { path = "../api-types" }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
