@@ -55,6 +55,9 @@ mod tests {
     fn invalid_score_is_rejected() {
         let err = Score::new(101).expect_err("101 should be rejected");
 
-        assert_eq!(err.to_string(), "invalid score: 101. score must be in [0, 100]");
+        assert_eq!(
+            err.to_string(),
+            "invalid score: 101. score must be in [0, 100]"
+        );
     }
 }
