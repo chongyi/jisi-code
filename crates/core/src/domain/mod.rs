@@ -1,3 +1,4 @@
+mod agent_executor;
 mod difficulty;
 mod error;
 mod ids;
@@ -7,6 +8,9 @@ mod mailbox;
 mod score;
 mod submission_status;
 
+pub use agent_executor::{
+    AgentExecutionRequest, AgentExecutionResult, AgentExecutor, AgentExecutorError,
+};
 pub use difficulty::Difficulty;
 pub use error::DomainError;
 pub use ids::{MailId, ProblemId, SubmissionId, UserId};
