@@ -87,4 +87,13 @@ impl AcpProcess {
         info!("ACP process killed");
         Ok(())
     }
+
+    /// Non-blockingly checks whether the process has exited.
+    /// Returns Some(ExitStatus) if exited, None if still running.
+    pub fn try_wait(&mut self) -> Result<Option<std::process::ExitStatus>> {
+        match self.child.try_wait()? {
+            Some(status) => Ok(Some(status)),
+            None => Ok(None),
+        }
+    }
 }

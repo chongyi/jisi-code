@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -133,17 +134,19 @@ impl AcpClient {
             let line = match line_result {
                 Ok(Some(line)) => line,
                 Ok(None) => {
+                    let exit_info = Self::process_exit_info(&process).await;
                     event_tx.emit(OrchestratorEvent::SessionError {
                         session_id: session_id.clone(),
-                        error: "ACP process stdout reached EOF".to_string(),
+                        error: format!("ACP process terminated: {exit_info}"),
                     });
                     break;
                 }
                 Err(err) => {
+                    let exit_info = Self::process_exit_info(&process).await;
                     warn!(error = %err, "failed to read ACP process output");
                     event_tx.emit(OrchestratorEvent::SessionError {
                         session_id: session_id.clone(),
-                        error: format!("failed to read ACP process output: {err}"),
+                        error: format!("failed to read ACP process output: {err}; {exit_info}"),
                     });
                     break;
                 }
@@ -161,6 +164,32 @@ impl AcpClient {
 
             warn!(line = %line, "received unrecognized ACP payload");
         }
+    }
+
+    async fn process_exit_info(process: &Arc<RwLock<AcpProcess>>) -> String {
+        let mut proc = process.write().await;
+        match proc.try_wait() {
+            Ok(Some(status)) => format!("process exited with {}", Self::format_exit_status(status)),
+            Ok(None) => "process stdout closed but process is still running".to_string(),
+            Err(err) => format!("failed to check process status: {err}"),
+        }
+    }
+
+    fn format_exit_status(status: ExitStatus) -> String {
+        if let Some(code) = status.code() {
+            return format!("exit code {code}");
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+
+            if let Some(signal) = status.signal() {
+                return format!("signal {signal}");
+            }
+        }
+
+        format!("status {status}")
     }
 
     async fn handle_response(
