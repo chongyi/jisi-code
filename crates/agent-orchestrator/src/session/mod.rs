@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 use uuid::Uuid;
 
 pub mod manager;
+pub use manager::SessionManager;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

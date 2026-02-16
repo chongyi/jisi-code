@@ -9,4 +9,4 @@ pub use config::{AgentConfig, AgentType, EnvVar, OrchestratorConfig};
 pub use error::{OrchestratorError, Result};
 pub use events::{EventBroadcaster, EventStream, OrchestratorEvent};
 pub use executor::{AcpExecutor, Executor};
-pub use session::{Session, SessionId, SessionStatus};
+pub use session::{Session, SessionId, SessionManager, SessionStatus};
