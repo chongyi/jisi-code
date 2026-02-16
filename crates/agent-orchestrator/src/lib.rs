@@ -8,5 +8,5 @@ pub mod session;
 pub use config::{AgentConfig, AgentType, EnvVar, OrchestratorConfig};
 pub use error::{OrchestratorError, Result};
 pub use events::{EventBroadcaster, EventStream, OrchestratorEvent};
-pub use executor::Executor;
+pub use executor::{AcpExecutor, Executor};
 pub use session::{Session, SessionId, SessionStatus};

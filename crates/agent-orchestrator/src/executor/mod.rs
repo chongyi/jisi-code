@@ -39,3 +39,5 @@ pub trait Executor: Send + Sync {
     /// 实现应尽量保证幂等，确保重复调用不会导致未定义行为。
     async fn shutdown(&mut self) -> Result<()>;
 }
+
+pub use acp::AcpExecutor;
