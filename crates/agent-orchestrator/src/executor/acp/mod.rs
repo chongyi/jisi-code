@@ -4,6 +4,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use tracing::info;
 
@@ -15,6 +16,9 @@ use process::AcpProcess;
 pub mod protocol;
 pub mod process;
 pub mod client;
+
+const INIT_TIMEOUT: Duration = Duration::from_secs(30);
+const SEND_MESSAGE_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct AcpExecutor {
     name: String,
@@ -46,6 +50,7 @@ impl Executor for AcpExecutor {
         &self.name
     }
 
+    #[tracing::instrument(skip(self))]
     async fn start(&mut self, project_path: &Path) -> Result<()> {
         info!(
             executor = %self.name,
@@ -70,19 +75,25 @@ impl Executor for AcpExecutor {
         .await?;
 
         let client = AcpClient::new(process, self.event_tx.clone(), self.session_id.clone());
-        client.initialize().await?;
+        tokio::time::timeout(INIT_TIMEOUT, client.initialize())
+            .await
+            .map_err(|_| OrchestratorError::Executor("ACP initialization timed out".to_string()))??;
         self.client = Some(client);
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn send_message(&mut self, prompt: &str) -> Result<()> {
         let client = self
             .client
             .as_ref()
             .ok_or_else(|| OrchestratorError::Executor("执行器未启动".to_string()))?;
-        client.send_message(prompt).await
+        tokio::time::timeout(SEND_MESSAGE_TIMEOUT, client.send_message(prompt))
+            .await
+            .map_err(|_| OrchestratorError::Executor("send_message timed out".to_string()))?
     }
 
+    #[tracing::instrument(skip(self))]
     async fn shutdown(&mut self) -> Result<()> {
         info!(
             executor = %self.name,

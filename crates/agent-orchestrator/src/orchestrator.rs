@@ -40,6 +40,7 @@ impl Orchestrator {
         })
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn create_session(&self, agent_id: &str, project_path: &Path) -> Result<Session> {
         let agent_config = self
             .config
@@ -67,10 +68,12 @@ impl Orchestrator {
         self.session_manager.create_session(executor, project_path).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn send_prompt(&self, session_id: &SessionId, prompt: &str) -> Result<()> {
         self.session_manager.send_prompt(session_id, prompt).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn close_session(&self, session_id: &SessionId) -> Result<()> {
         self.session_manager.close_session(session_id).await
     }

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::sync::{RwLock, oneshot};
@@ -22,6 +23,8 @@ pub struct AcpClient {
     event_tx: Arc<EventBroadcaster>,
     session_id: SessionId,
 }
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl AcpClient {
     pub fn new(process: AcpProcess, event_tx: Arc<EventBroadcaster>, session_id: SessionId) -> Self {
@@ -90,9 +93,20 @@ impl AcpClient {
             return Err(err);
         }
 
-        let response = rx.await.map_err(|_| {
-            OrchestratorError::Executor(format!("ACP request cancelled before response: id={id}"))
-        })?;
+        let response = match tokio::time::timeout(REQUEST_TIMEOUT, rx).await {
+            Ok(response) => response.map_err(|_| {
+                OrchestratorError::Executor(format!(
+                    "ACP request cancelled before response: id={id}"
+                ))
+            })?,
+            Err(_) => {
+                let mut pending = self.pending_requests.write().await;
+                pending.remove(&id);
+                return Err(OrchestratorError::Executor(format!(
+                    "ACP request timed out waiting for response: id={id}"
+                )));
+            }
+        };
 
         if let Some(error) = response.error.as_ref() {
             return Err(OrchestratorError::Executor(format!(

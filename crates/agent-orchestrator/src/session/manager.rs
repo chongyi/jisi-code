@@ -29,6 +29,7 @@ impl SessionManager {
         }
     }
 
+    #[tracing::instrument(skip(self, executor))]
     pub async fn create_session(
         &self,
         mut executor: Box<dyn Executor>,
@@ -68,6 +69,7 @@ impl SessionManager {
         Ok(session)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn send_prompt(&self, session_id: &SessionId, prompt: &str) -> Result<()> {
         info!(session_id = %session_id, "sending prompt");
 
@@ -78,6 +80,7 @@ impl SessionManager {
         state.executor.send_message(prompt).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn close_session(&self, session_id: &SessionId) -> Result<()> {
         info!(session_id = %session_id, "closing session");
 
