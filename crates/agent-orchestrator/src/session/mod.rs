@@ -3,6 +3,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use uuid::Uuid;
 
 /// 会话管理器实现。
@@ -24,6 +25,20 @@ impl SessionId {
     /// 从字符串解析会话 ID。
     pub fn from_string(value: &str) -> Result<Self, uuid::Error> {
         Uuid::parse_str(value).map(Self)
+    }
+}
+
+impl From<Uuid> for SessionId {
+    fn from(value: Uuid) -> Self {
+        Self(value)
+    }
+}
+
+impl FromStr for SessionId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
     }
 }
 
@@ -75,5 +90,15 @@ impl Session {
     /// 获取会话 ID。
     pub fn id(&self) -> &SessionId {
         &self.id
+    }
+
+    /// 获取关联 Agent 名称。
+    pub fn agent_name(&self) -> &str {
+        &self.agent_name
+    }
+
+    /// 获取会话状态。
+    pub fn status(&self) -> &SessionStatus {
+        &self.status
     }
 }

@@ -16,6 +16,9 @@ pub mod executor;
 pub mod orchestrator;
 /// 会话模型与会话管理。
 pub mod session;
+/// WebSocket API 模块（需启用 `ws-api` feature）。
+#[cfg(feature = "ws-api")]
+pub mod ws_api;
 
 pub use config::{AgentConfig, AgentType, EnvVar, OrchestratorConfig};
 pub use error::{OrchestratorError, Result};
