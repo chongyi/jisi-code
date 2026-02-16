@@ -9,6 +9,7 @@ use async_trait::async_trait;
 
 use crate::error::Result;
 
+/// ACP 执行器实现。
 pub mod acp;
 
 /// 执行器抽象接口。

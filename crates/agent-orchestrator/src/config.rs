@@ -4,14 +4,18 @@ use anyhow::Context;
 use serde::Deserialize;
 type Result<T> = anyhow::Result<T>;
 
+/// 编排器整体配置。
 #[derive(Debug, Deserialize)]
 pub struct OrchestratorConfig {
+    /// 可用 Agent 列表。
     pub agents: Vec<AgentConfig>,
+    /// 事件广播缓冲区大小。
     #[serde(default = "default_event_buffer_size")]
     pub event_buffer_size: usize,
 }
 
 impl OrchestratorConfig {
+    /// 从 TOML 配置文件加载编排器配置。
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let content = std::fs::read_to_string(path)
@@ -20,38 +24,54 @@ impl OrchestratorConfig {
             .with_context(|| format!("failed to parse config file: {}", path.display()))
     }
 
+    /// 从 TOML 字符串解析编排器配置。
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Result<Self> {
         toml::from_str(s).context("failed to deserialize orchestrator config")
     }
 }
 
+/// 单个 Agent 的执行配置。
 #[derive(Debug, Deserialize, Clone)]
 pub struct AgentConfig {
+    /// Agent 唯一标识。
     pub id: String,
+    /// 对外展示名称。
     pub display_name: String,
+    /// Agent 类型。
     #[serde(rename = "type")]
     pub agent_type: AgentType,
+    /// 可执行命令。
     pub command: String,
+    /// 命令参数列表。
     #[serde(default)]
     pub args: Vec<String>,
+    /// 启动时注入的环境变量。
     #[serde(default)]
     pub env: Vec<EnvVar>,
+    /// 是否启用该 Agent。
     #[serde(default = "default_enabled")]
     pub enabled: bool,
 }
 
+/// 环境变量键值对配置。
 #[derive(Debug, Deserialize, Clone)]
 pub struct EnvVar {
+    /// 环境变量名。
     pub key: String,
+    /// 环境变量值。
     pub value: String,
 }
 
+/// 支持的 Agent 类型。
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentType {
+    /// ACP（Agent Communication Protocol）类型 Agent。
     Acp,
+    /// Codex 类型 Agent。
     Codex,
+    /// OpenCode 类型 Agent。
     OpenCode,
 }
 

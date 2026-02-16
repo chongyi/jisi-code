@@ -17,6 +17,9 @@ use crate::executor::acp::protocol::{
 };
 use crate::session::SessionId;
 
+/// ACP 协议客户端。
+///
+/// 负责请求发送、响应分发以及通知到编排器事件的转换。
 pub struct AcpClient {
     process: Arc<RwLock<AcpProcess>>,
     next_id: AtomicU64,
@@ -28,6 +31,7 @@ pub struct AcpClient {
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl AcpClient {
+    /// 创建 ACP 客户端并启动后台读循环。
     pub fn new(process: AcpProcess, event_tx: Arc<EventBroadcaster>, session_id: SessionId) -> Self {
         let process = Arc::new(RwLock::new(process));
         let pending_requests = Arc::new(RwLock::new(HashMap::new()));
@@ -50,18 +54,21 @@ impl AcpClient {
         }
     }
 
+    /// 发送初始化请求。
     pub async fn initialize(&self) -> Result<()> {
         info!(session_id = %self.session_id, "initializing ACP client");
         let _ = self.send_request(METHOD_INITIALIZE, None).await?;
         Ok(())
     }
 
+    /// 发送用户消息请求。
     pub async fn send_message(&self, prompt: &str) -> Result<()> {
         let params = json!({ "message": prompt });
         let _ = self.send_request(METHOD_SEND_MESSAGE, Some(params)).await?;
         Ok(())
     }
 
+    /// 关闭客户端并终止底层 ACP 进程。
     pub async fn shutdown(&self) -> Result<()> {
         info!(session_id = %self.session_id, "shutting down ACP client");
         let mut process = self.process.write().await;

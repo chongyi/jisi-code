@@ -13,13 +13,17 @@ use crate::{AgentConfig, EventBroadcaster, Executor, Result, SessionId};
 use client::AcpClient;
 use process::AcpProcess;
 
+/// ACP 协议对象定义。
 pub mod protocol;
+/// ACP 子进程封装。
 pub mod process;
+/// ACP 客户端实现。
 pub mod client;
 
 const INIT_TIMEOUT: Duration = Duration::from_secs(30);
 const SEND_MESSAGE_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// 基于 ACP 协议的执行器实现。
 pub struct AcpExecutor {
     name: String,
     config: AgentConfig,
@@ -29,6 +33,7 @@ pub struct AcpExecutor {
 }
 
 impl AcpExecutor {
+    /// 创建 ACP 执行器实例。
     pub fn new(config: AgentConfig, event_tx: Arc<EventBroadcaster>) -> Result<Self> {
         Ok(Self {
             name: config.id.clone(),
@@ -39,6 +44,7 @@ impl AcpExecutor {
         })
     }
 
+    /// 获取执行器关联的会话 ID。
     pub fn session_id(&self) -> &SessionId {
         &self.session_id
     }

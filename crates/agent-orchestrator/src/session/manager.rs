@@ -16,12 +16,14 @@ struct SessionState {
     executor: Box<dyn Executor>,
 }
 
+/// 会话生命周期管理器。
 pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<SessionId, SessionState>>>,
     event_broadcaster: Arc<EventBroadcaster>,
 }
 
 impl SessionManager {
+    /// 创建会话管理器。
     pub fn new(event_broadcaster: Arc<EventBroadcaster>) -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -29,6 +31,7 @@ impl SessionManager {
         }
     }
 
+    /// 创建会话并启动执行器。
     #[tracing::instrument(skip(self, executor))]
     pub async fn create_session(
         &self,
@@ -69,6 +72,7 @@ impl SessionManager {
         Ok(session)
     }
 
+    /// 向指定会话发送提示词。
     #[tracing::instrument(skip(self))]
     pub async fn send_prompt(&self, session_id: &SessionId, prompt: &str) -> Result<()> {
         info!(session_id = %session_id, "sending prompt");
@@ -80,6 +84,7 @@ impl SessionManager {
         state.executor.send_message(prompt).await
     }
 
+    /// 关闭并移除指定会话。
     #[tracing::instrument(skip(self))]
     pub async fn close_session(&self, session_id: &SessionId) -> Result<()> {
         info!(session_id = %session_id, "closing session");
@@ -99,11 +104,13 @@ impl SessionManager {
         Ok(())
     }
 
+    /// 列出当前所有会话。
     pub async fn list_sessions(&self) -> Vec<Session> {
         let sessions = self.sessions.read().await;
         sessions.values().map(|state| state.session.clone()).collect()
     }
 
+    /// 查询指定会话。
     pub async fn get_session(&self, session_id: &SessionId) -> Option<Session> {
         let sessions = self.sessions.read().await;
         sessions.get(session_id).map(|state| state.session.clone())

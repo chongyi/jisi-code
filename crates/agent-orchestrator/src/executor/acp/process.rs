@@ -7,6 +7,7 @@ use tracing::{debug, info, warn};
 
 use crate::error::{OrchestratorError, Result};
 
+/// ACP 子进程句柄与标准输入输出通道封装。
 pub struct AcpProcess {
     child: Child,
     stdin: ChildStdin,
@@ -14,6 +15,9 @@ pub struct AcpProcess {
 }
 
 impl AcpProcess {
+    /// 启动 ACP 子进程。
+    ///
+    /// `command` 和 `args` 用于构造命令行，`project_path` 作为工作目录。
     pub async fn spawn(
         command: &str,
         args: &[String],
@@ -56,6 +60,7 @@ impl AcpProcess {
         })
     }
 
+    /// 向 ACP 进程写入一行 JSON-RPC 消息。
     pub async fn send_line(&mut self, line: &str) -> Result<()> {
         debug!(line = line, "sending line to ACP process");
         self.stdin.write_all(line.as_bytes()).await?;
@@ -64,6 +69,9 @@ impl AcpProcess {
         Ok(())
     }
 
+    /// 从 ACP 进程读取一行输出。
+    ///
+    /// 当子进程输出 EOF 时返回 `Ok(None)`。
     pub async fn read_line(&mut self) -> Result<Option<String>> {
         let mut line = String::new();
         let bytes = self.stdout.read_line(&mut line).await?;
@@ -78,6 +86,7 @@ impl AcpProcess {
         Ok(Some(trimmed))
     }
 
+    /// 终止 ACP 子进程。
     pub async fn kill(&mut self) -> Result<()> {
         info!("killing ACP process");
         if let Err(err) = self.child.kill().await {
