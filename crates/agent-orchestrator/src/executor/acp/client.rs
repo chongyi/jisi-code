@@ -32,7 +32,11 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl AcpClient {
     /// 创建 ACP 客户端并启动后台读循环。
-    pub fn new(process: AcpProcess, event_tx: Arc<EventBroadcaster>, session_id: SessionId) -> Self {
+    pub fn new(
+        process: AcpProcess,
+        event_tx: Arc<EventBroadcaster>,
+        session_id: SessionId,
+    ) -> Self {
         let process = Arc::new(RwLock::new(process));
         let pending_requests = Arc::new(RwLock::new(HashMap::new()));
 
@@ -212,7 +216,10 @@ impl AcpClient {
         match tx {
             Some(tx) => {
                 if tx.send(response).is_err() {
-                    debug!(id = response_id, "request receiver dropped before response delivery");
+                    debug!(
+                        id = response_id,
+                        "request receiver dropped before response delivery"
+                    );
                 }
             }
             None => {

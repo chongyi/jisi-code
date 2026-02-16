@@ -1,7 +1,7 @@
+use crate::session::SessionId;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
-use crate::session::SessionId;
 
 /// 编排器对外广播的事件类型。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,5 +87,70 @@ impl EventStream {
     /// 非阻塞尝试接收一条事件。
     pub fn try_recv(&mut self) -> Result<OrchestratorEvent> {
         Ok(self.receiver.try_recv()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_event_broadcast_and_receive() {
+        let broadcaster = EventBroadcaster::new(16);
+        let mut stream = broadcaster.subscribe();
+        let session_id = SessionId::new();
+
+        broadcaster.emit(OrchestratorEvent::SessionCreated {
+            session_id: session_id.clone(),
+            agent_name: "mock-agent".to_string(),
+        });
+
+        let event = stream.recv().await.expect("event should be received");
+        match event {
+            OrchestratorEvent::SessionCreated {
+                session_id: received_id,
+                agent_name,
+            } => {
+                assert_eq!(received_id, session_id);
+                assert_eq!(agent_name, "mock-agent");
+            }
+            other => panic!("expected SessionCreated, got: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_multiple_subscribers() {
+        let broadcaster = EventBroadcaster::new(16);
+        let mut stream_a = broadcaster.subscribe();
+        let mut stream_b = broadcaster.subscribe();
+        let session_id = SessionId::new();
+
+        broadcaster.emit(OrchestratorEvent::SessionClosed {
+            session_id: session_id.clone(),
+        });
+
+        let event_a = stream_a.recv().await.expect("subscriber A should receive");
+        let event_b = stream_b.recv().await.expect("subscriber B should receive");
+
+        match event_a {
+            OrchestratorEvent::SessionClosed {
+                session_id: received_id,
+            } => assert_eq!(received_id, session_id),
+            other => panic!("expected SessionClosed for A, got: {other:?}"),
+        }
+
+        match event_b {
+            OrchestratorEvent::SessionClosed {
+                session_id: received_id,
+            } => assert_eq!(received_id, session_id),
+            other => panic!("expected SessionClosed for B, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_try_recv_empty() {
+        let broadcaster = EventBroadcaster::new(16);
+        let mut stream = broadcaster.subscribe();
+        assert!(stream.try_recv().is_err());
     }
 }

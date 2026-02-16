@@ -75,7 +75,9 @@ impl Orchestrator {
             _ => return Err(OrchestratorError::UnsupportedAgentType),
         };
 
-        self.session_manager.create_session(executor, project_path).await
+        self.session_manager
+            .create_session(executor, project_path)
+            .await
     }
 
     /// 向指定会话发送用户提示词。

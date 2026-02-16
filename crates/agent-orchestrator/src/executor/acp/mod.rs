@@ -13,12 +13,12 @@ use crate::{AgentConfig, EventBroadcaster, Executor, Result, SessionId};
 use client::AcpClient;
 use process::AcpProcess;
 
-/// ACP 协议对象定义。
-pub mod protocol;
-/// ACP 子进程封装。
-pub mod process;
 /// ACP 客户端实现。
 pub mod client;
+/// ACP 子进程封装。
+pub mod process;
+/// ACP 协议对象定义。
+pub mod protocol;
 
 const INIT_TIMEOUT: Duration = Duration::from_secs(30);
 const SEND_MESSAGE_TIMEOUT: Duration = Duration::from_secs(60);
@@ -83,7 +83,9 @@ impl Executor for AcpExecutor {
         let client = AcpClient::new(process, self.event_tx.clone(), self.session_id.clone());
         tokio::time::timeout(INIT_TIMEOUT, client.initialize())
             .await
-            .map_err(|_| OrchestratorError::Executor("ACP initialization timed out".to_string()))??;
+            .map_err(|_| {
+                OrchestratorError::Executor("ACP initialization timed out".to_string())
+            })??;
         self.client = Some(client);
         Ok(())
     }
