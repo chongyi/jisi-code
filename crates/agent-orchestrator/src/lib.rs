@@ -6,3 +6,4 @@ pub mod orchestrator;
 pub mod session;
 
 pub use error::{OrchestratorError, Result};
+pub use session::{Session, SessionId, SessionStatus};
