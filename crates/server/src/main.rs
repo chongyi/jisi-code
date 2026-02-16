@@ -1,5 +1,9 @@
+use std::sync::Arc;
+
 use agent_orchestrator::{Orchestrator, OrchestratorConfig};
 use anyhow::Context;
+use axum::{Router, routing::get};
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
@@ -19,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
         warn!("no enabled agents are available");
     } else {
         info!(count = agents.len(), "available agents loaded");
-        for agent in agents {
+        for agent in &agents {
             info!(
                 id = %agent.id,
                 display_name = %agent.display_name,
@@ -30,30 +34,38 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let mut event_stream = orchestrator.subscribe_events();
-    info!("subscribed to orchestrator event stream");
-    info!("server is ready, press Ctrl+C to shut down");
+    let orchestrator = Arc::new(orchestrator);
 
-    loop {
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {
-                info!("shutdown signal received, stopping server");
-                break;
-            }
-            event = event_stream.recv() => {
-                match event {
-                    Ok(event) => info!(?event, "orchestrator event"),
-                    Err(err) => {
-                        warn!(error = %err, "failed to receive orchestrator event");
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
+    let app = Router::new()
+        .route("/ws", get(agent_orchestrator::ws_api::websocket_handler))
+        .layer(cors)
+        .with_state(orchestrator);
+
+    let bind_addr = "127.0.0.1:3001";
+    let listener = tokio::net::TcpListener::bind(bind_addr)
+        .await
+        .with_context(|| format!("failed to bind to {}", bind_addr))?;
+    info!(addr = %bind_addr, "server listening");
+
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .context("server error")?;
 
     info!("server shutdown complete");
     Ok(())
+}
+
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install Ctrl+C handler");
+    info!("shutdown signal received");
 }
 
 fn init_tracing() -> anyhow::Result<()> {
