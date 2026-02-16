@@ -7,3 +7,4 @@ pub mod session;
 
 pub use error::{OrchestratorError, Result};
 pub use session::{Session, SessionId, SessionStatus};
+pub use events::{EventBroadcaster, EventStream, OrchestratorEvent};
