@@ -10,12 +10,16 @@ import { cn } from "~/lib/utils";
 import { useSessionStore } from "~/stores/session-store";
 import type { ChatMessage } from "~/types/websocket";
 
+const EMPTY_MESSAGES: ChatMessage[] = [];
+
 export function ChatPanel() {
   const send = useWsSend();
   const connectionStatus = useSessionStore((state) => state.connectionStatus);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const messages = useSessionStore((state) =>
-    state.activeSessionId ? state.messages[state.activeSessionId] ?? [] : []
+    state.activeSessionId
+      ? state.messages[state.activeSessionId] ?? EMPTY_MESSAGES
+      : EMPTY_MESSAGES
   );
   const addUserMessage = useSessionStore((state) => state.addUserMessage);
   const sessions = useSessionStore((state) => state.sessions);
