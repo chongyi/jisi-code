@@ -1,2 +1,2 @@
 [workspace]
-members = ["crates/server"]
+members = ["crates/server", "crates/agent-orchestrator"]
