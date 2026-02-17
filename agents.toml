@@ -1,0 +1,13 @@
+event_buffer_size = 1000
+
+[[agents]]
+id = "claude-code-acp"
+display_name = "Claude Code (ACP)"
+type = "acp"
+command = "claude"
+args = ["agent", "--transport", "stdio"]
+enabled = true
+
+[[agents.env]]
+key = "CLAUDE_CODE_ENTRYPOINT"
+value = "agent-orchestrator"
