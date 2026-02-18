@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  FolderOpen,
   Loader2,
   Plus,
   RefreshCw,
@@ -7,8 +8,10 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { DirectoryInput } from "~/components/directory-picker";
+import { ModelSelector } from "~/components/model-selector";
 import { useWsSend } from "~/components/websocket-provider";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -16,7 +19,7 @@ import { ScrollArea } from "~/components/ui/scroll-area";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import { useSessionStore } from "~/stores/session-store";
-import type { ConnectionStatus } from "~/types/websocket";
+import type { ConnectionStatus, ModelConfig } from "~/types/websocket";
 
 export function Sidebar() {
   const send = useWsSend();
@@ -28,6 +31,7 @@ export function Sidebar() {
     (state) => state.creatingSessionAgentId
   );
   const lastError = useSessionStore((state) => state.lastError);
+  const projectPath = useSessionStore((state) => state.projectPath);
   const setActiveSession = useSessionStore((state) => state.setActiveSession);
   const startCreatingSession = useSessionStore(
     (state) => state.startCreatingSession
@@ -36,7 +40,12 @@ export function Sidebar() {
     (state) => state.finishCreatingSession
   );
   const setLastError = useSessionStore((state) => state.setLastError);
+  const setProjectPath = useSessionStore((state) => state.setProjectPath);
+  const agentModelConfigs = useSessionStore((state) => state.agentModelConfigs);
+  const setAgentModelConfig = useSessionStore((state) => state.setAgentModelConfig);
   const createTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [localProjectPath, setLocalProjectPath] = useState(projectPath);
 
   useEffect(() => {
     if (createTimerRef.current) {
@@ -66,11 +75,14 @@ export function Sidebar() {
 
   const handleCreateSession = (agentId: string) => {
     setLastError(null);
+    setProjectPath(localProjectPath);
     startCreatingSession(agentId);
+    const modelConfig = normalizeModelConfig(agentModelConfigs[agentId]);
     const sent = send({
       type: "create_session",
       agent_id: agentId,
-      project_path: ".",
+      project_path: localProjectPath || ".",
+      model_config: modelConfig,
     });
 
     if (!sent) {
@@ -94,6 +106,9 @@ export function Sidebar() {
       setLastError("WebSocket is disconnected. Unable to refresh.");
     }
   };
+  const agentDisplayMap = new Map(
+    agents.map((agent) => [agent.id, agent.display_name] as const)
+  );
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
@@ -116,6 +131,19 @@ export function Sidebar() {
           </div>
         ) : null}
 
+        {/* Project Path Input */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <FolderOpen className="size-3.5" />
+            <span>Working Directory</span>
+          </div>
+          <DirectoryInput
+            value={localProjectPath}
+            onChange={setLocalProjectPath}
+            disabled={connectionStatus !== "connected" || creatingSessionAgentId !== null}
+          />
+        </div>
+
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">Available Agents</p>
           <Button
@@ -128,33 +156,57 @@ export function Sidebar() {
             <RefreshCw className="size-3.5" />
           </Button>
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          Model settings are applied when creating a new session.
+        </p>
 
         <div className="space-y-1.5">
-          {agents.map((agent) => (
-            <Button
-              key={agent.id}
-              variant="outline"
-              size="sm"
-              className="w-full justify-start"
-              onClick={() => handleCreateSession(agent.id)}
-              disabled={
-                connectionStatus !== "connected" ||
-                !agent.enabled ||
-                creatingSessionAgentId !== null
-              }
-            >
-              {creatingSessionAgentId === agent.id ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Plus className="size-3.5" />
-              )}
-              <span className="truncate">
-                {creatingSessionAgentId === agent.id
-                  ? "Creating session..."
-                  : agent.display_name}
-              </span>
-            </Button>
-          ))}
+          {agents.map((agent) => {
+            const modelConfig = agentModelConfigs[agent.id] ?? null;
+
+            return (
+              <div
+                key={agent.id}
+                className="rounded-md border bg-background/70 p-2 shadow-sm"
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start"
+                  onClick={() => handleCreateSession(agent.id)}
+                  disabled={
+                    connectionStatus !== "connected" ||
+                    !agent.enabled ||
+                    creatingSessionAgentId !== null
+                  }
+                >
+                  {creatingSessionAgentId === agent.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="size-3.5" />
+                  )}
+                  <span className="truncate">
+                    {creatingSessionAgentId === agent.id
+                      ? "Creating session..."
+                      : agent.display_name}
+                  </span>
+                </Button>
+                <div className="mt-2 flex justify-end">
+                  <ModelSelector
+                    agent={agent}
+                    config={modelConfig}
+                    onChange={(nextConfig) =>
+                      setAgentModelConfig(agent.id, normalizeModelConfig(nextConfig) ?? null)
+                    }
+                    disabled={
+                      connectionStatus !== "connected" ||
+                      creatingSessionAgentId !== null
+                    }
+                  />
+                </div>
+              </div>
+            );
+          })}
           {agents.length === 0 ? (
             <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
               No agents loaded
@@ -188,10 +240,17 @@ export function Sidebar() {
               )}
             >
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{session.agent_name}</p>
+                <p className="truncate font-medium">
+                  {agentDisplayMap.get(session.agent_name) ?? session.agent_name}
+                </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {session.status}
                 </p>
+                {session.model_config?.model ? (
+                  <p className="truncate text-[11px] text-muted-foreground/80">
+                    {session.model_config.model}
+                  </p>
+                ) : null}
               </div>
               <Button
                 type="button"
@@ -220,6 +279,23 @@ export function Sidebar() {
       </ScrollArea>
     </aside>
   );
+}
+
+function normalizeModelConfig(
+  config: ModelConfig | null | undefined
+): ModelConfig | undefined {
+  if (!config) {
+    return undefined;
+  }
+
+  const normalized: ModelConfig = {};
+  if (config.model) {
+    normalized.model = config.model;
+  }
+  if (config.reasoning_effort) {
+    normalized.reasoning_effort = config.reasoning_effort;
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 function ConnectionIndicator({ status }: { status: ConnectionStatus }) {

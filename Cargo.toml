@@ -1,2 +1,3 @@
 [workspace]
-members = ["crates/server", "crates/agent-orchestrator"]
+members = ["crates/server", "crates/agent-orchestrator", "crates/system-capabilities"]
+resolver = "3"

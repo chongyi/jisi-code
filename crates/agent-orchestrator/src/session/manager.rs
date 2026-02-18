@@ -8,7 +8,7 @@ use tracing::info;
 
 use crate::{
     EventBroadcaster, Executor, OrchestratorError, OrchestratorEvent, Result, Session, SessionId,
-    SessionStatus,
+    SessionModelConfig, SessionStatus,
 };
 
 struct SessionState {
@@ -37,6 +37,7 @@ impl SessionManager {
         &self,
         mut executor: Box<dyn Executor>,
         project_path: &Path,
+        model_config: Option<SessionModelConfig>,
     ) -> Result<Session> {
         let session_id = SessionId::new();
         executor.set_session_id(session_id.clone());
@@ -46,6 +47,7 @@ impl SessionManager {
             id: session_id.clone(),
             status: SessionStatus::Ready,
             agent_name: executor.name().to_string(),
+            model_config: model_config.clone(),
             created_at: Utc::now(),
         };
 
@@ -69,6 +71,7 @@ impl SessionManager {
             .emit(OrchestratorEvent::SessionCreated {
                 session_id,
                 agent_name: session.agent_name.clone(),
+                model_config: session.model_config.clone(),
             });
 
         Ok(session)
@@ -149,7 +152,7 @@ mod tests {
         let executor_handle = executor.clone();
 
         let session = manager
-            .create_session(Box::new(executor), Path::new("."))
+            .create_session(Box::new(executor), Path::new("."), None)
             .await
             .expect("session should be created");
 
@@ -164,11 +167,11 @@ mod tests {
         let manager = SessionManager::new(broadcaster);
 
         manager
-            .create_session(Box::new(MockExecutor::new("agent-1")), Path::new("."))
+            .create_session(Box::new(MockExecutor::new("agent-1")), Path::new("."), None)
             .await
             .expect("first session should be created");
         manager
-            .create_session(Box::new(MockExecutor::new("agent-2")), Path::new("."))
+            .create_session(Box::new(MockExecutor::new("agent-2")), Path::new("."), None)
             .await
             .expect("second session should be created");
 
@@ -182,7 +185,11 @@ mod tests {
         let manager = SessionManager::new(broadcaster);
 
         let created = manager
-            .create_session(Box::new(MockExecutor::new("agent-get")), Path::new("."))
+            .create_session(
+                Box::new(MockExecutor::new("agent-get")),
+                Path::new("."),
+                None,
+            )
             .await
             .expect("session should be created");
 
@@ -202,7 +209,7 @@ mod tests {
         let executor_handle = executor.clone();
 
         let created = manager
-            .create_session(Box::new(executor), Path::new("."))
+            .create_session(Box::new(executor), Path::new("."), None)
             .await
             .expect("session should be created");
 
@@ -222,7 +229,11 @@ mod tests {
         let manager = SessionManager::new(broadcaster);
 
         let created = manager
-            .create_session(Box::new(MockExecutor::new("agent-prompt")), Path::new("."))
+            .create_session(
+                Box::new(MockExecutor::new("agent-prompt")),
+                Path::new("."),
+                None,
+            )
             .await
             .expect("session should be created");
 

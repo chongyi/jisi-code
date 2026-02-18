@@ -120,7 +120,7 @@ async fn test_full_workflow() {
 
     let mut events = orchestrator.subscribe_events();
     let session = orchestrator
-        .create_session("claude-code-sdk", &manifest_dir)
+        .create_session("claude-code-sdk", &manifest_dir, None)
         .await
         .expect("session should be created");
 

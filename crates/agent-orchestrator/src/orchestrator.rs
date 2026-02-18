@@ -4,8 +4,9 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::{
-    AcpExecutor, AgentType, ClaudeSdkExecutor, EventBroadcaster, EventStream, Executor,
-    OrchestratorConfig, OrchestratorError, Result, Session, SessionId, SessionManager,
+    AcpExecutor, AgentType, ClaudeSdkExecutor, CodexExecutor, EventBroadcaster, EventStream,
+    Executor, OpenCodeExecutor, OrchestratorConfig, OrchestratorError, ReasoningEffort, Result,
+    Session, SessionId, SessionManager, SessionModelConfig, SessionReasoningEffort,
 };
 
 /// 对外暴露的 Agent 元信息。
@@ -51,7 +52,12 @@ impl Orchestrator {
     ///
     /// 仅允许创建已启用且存在的 `agent_id` 会话。
     #[tracing::instrument(skip(self))]
-    pub async fn create_session(&self, agent_id: &str, project_path: &Path) -> Result<Session> {
+    pub async fn create_session(
+        &self,
+        agent_id: &str,
+        project_path: &Path,
+        model_config: Option<SessionModelConfig>,
+    ) -> Result<Session> {
         let agent_config = self
             .config
             .agents
@@ -59,11 +65,16 @@ impl Orchestrator {
             .find(|agent| agent.id == agent_id && agent.enabled)
             .cloned()
             .ok_or_else(|| OrchestratorError::AgentNotFound(agent_id.to_string()))?;
+        let normalized_model_config = model_config.and_then(SessionModelConfig::normalized);
 
         info!(
             agent_id = %agent_config.id,
             agent_type = ?agent_config.agent_type,
             project_path = %project_path.display(),
+            model = ?normalized_model_config.as_ref().and_then(|cfg| cfg.model.as_ref()),
+            reasoning_effort = ?normalized_model_config
+                .as_ref()
+                .and_then(|cfg| cfg.reasoning_effort.as_ref()),
             "creating orchestrated session"
         );
 
@@ -76,11 +87,55 @@ impl Orchestrator {
                 agent_config,
                 self.event_broadcaster.clone(),
             )?),
-            _ => return Err(OrchestratorError::UnsupportedAgentType),
+            AgentType::Codex => {
+                let options = crate::CodexModelOptions {
+                    model: normalized_model_config
+                        .as_ref()
+                        .and_then(|cfg| cfg.model.clone()),
+                    reasoning_effort: normalized_model_config
+                        .as_ref()
+                        .and_then(|cfg| cfg.reasoning_effort.as_ref())
+                        .map(map_reasoning_effort),
+                };
+
+                if options.model.is_some() || options.reasoning_effort.is_some() {
+                    Box::new(CodexExecutor::with_model_options(
+                        agent_config,
+                        self.event_broadcaster.clone(),
+                        options,
+                    )?)
+                } else {
+                    Box::new(CodexExecutor::new(
+                        agent_config,
+                        self.event_broadcaster.clone(),
+                    )?)
+                }
+            }
+            AgentType::OpenCode => {
+                let options = crate::OpenCodeModelOptions {
+                    model: normalized_model_config
+                        .as_ref()
+                        .and_then(|cfg| cfg.model.clone()),
+                    provider: None,
+                };
+
+                if options.model.is_some() {
+                    Box::new(OpenCodeExecutor::with_model_options(
+                        agent_config,
+                        self.event_broadcaster.clone(),
+                        options,
+                    )?)
+                } else {
+                    Box::new(OpenCodeExecutor::new(
+                        agent_config,
+                        self.event_broadcaster.clone(),
+                    )?)
+                }
+            }
         };
 
         self.session_manager
-            .create_session(executor, project_path)
+            .create_session(executor, project_path, normalized_model_config)
             .await
     }
 
@@ -124,5 +179,13 @@ impl Orchestrator {
     /// 根据会话 ID 查询会话信息。
     pub async fn get_session(&self, session_id: &SessionId) -> Option<Session> {
         self.session_manager.get_session(session_id).await
+    }
+}
+
+fn map_reasoning_effort(value: &SessionReasoningEffort) -> ReasoningEffort {
+    match value {
+        SessionReasoningEffort::Low => ReasoningEffort::Low,
+        SessionReasoningEffort::Medium => ReasoningEffort::Medium,
+        SessionReasoningEffort::High => ReasoningEffort::High,
     }
 }

@@ -23,6 +23,10 @@ pub enum OrchestratorError {
     #[error("不支持的 Agent 类型")]
     UnsupportedAgentType,
 
+    /// HTTP 请求错误。
+    #[error("HTTP 错误: {0}")]
+    Http(String),
+
     /// IO 层错误。
     #[error("IO 错误: {0}")]
     Io(#[from] std::io::Error),
@@ -38,6 +42,12 @@ pub enum OrchestratorError {
     /// 其他来源的通用错误。
     #[error("其他错误: {0}")]
     Other(#[from] anyhow::Error),
+}
+
+impl From<reqwest::Error> for OrchestratorError {
+    fn from(err: reqwest::Error) -> Self {
+        OrchestratorError::Http(err.to_string())
+    }
 }
 
 /// 编排器统一 `Result` 别名。

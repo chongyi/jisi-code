@@ -14,6 +14,10 @@ use crate::session::SessionId;
 pub mod acp;
 /// Claude Agent SDK 执行器实现。
 pub mod claude_sdk;
+/// Codex CLI 执行器实现。
+pub mod codex;
+/// OpenCode 执行器实现。
+pub mod opencode;
 
 /// 执行器抽象接口。
 ///
@@ -49,3 +53,5 @@ pub trait Executor: Send + Sync {
 
 pub use acp::AcpExecutor;
 pub use claude_sdk::ClaudeSdkExecutor;
+pub use codex::{CodexExecutor, CodexModelOptions, ReasoningEffort};
+pub use opencode::{OpenCodeExecutor, OpenCodeModelOptions};

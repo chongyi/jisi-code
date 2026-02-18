@@ -1,6 +1,7 @@
-use crate::session::SessionId;
+use crate::session::{SessionId, SessionModelConfig};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tokio::sync::broadcast;
 
 /// 编排器对外广播的事件类型。
@@ -13,6 +14,8 @@ pub enum OrchestratorEvent {
         session_id: SessionId,
         /// 执行该会话的 Agent 名称。
         agent_name: String,
+        /// 会话模型配置（若创建时提供）。
+        model_config: Option<SessionModelConfig>,
     },
     /// 模型增量输出事件。
     ContentDelta {
@@ -28,7 +31,34 @@ pub enum OrchestratorEvent {
         /// 工具名称。
         tool_name: String,
         /// 工具调用参数。
-        args: serde_json::Value,
+        args: Value,
+    },
+    /// 文件变更事件。
+    FileChange {
+        /// 会话 ID。
+        session_id: SessionId,
+        /// 文件路径。
+        path: String,
+        /// 操作类型（read, write, edit, delete）。
+        action: String,
+        /// 文件内容（用于 write）。
+        content: Option<String>,
+        /// Diff 内容（用于 edit）。
+        diff: Option<String>,
+    },
+    /// Token 使用信息事件。
+    TokenUsage {
+        /// 会话 ID。
+        session_id: SessionId,
+        /// Token 使用详情。
+        usage: Value,
+    },
+    /// 思考/推理过程事件。
+    Thinking {
+        /// 会话 ID。
+        session_id: SessionId,
+        /// 思考内容。
+        content: String,
     },
     /// 会话错误事件。
     SessionError {
@@ -103,6 +133,7 @@ mod tests {
         broadcaster.emit(OrchestratorEvent::SessionCreated {
             session_id: session_id.clone(),
             agent_name: "mock-agent".to_string(),
+            model_config: None,
         });
 
         let event = stream.recv().await.expect("event should be received");
@@ -110,9 +141,11 @@ mod tests {
             OrchestratorEvent::SessionCreated {
                 session_id: received_id,
                 agent_name,
+                model_config,
             } => {
                 assert_eq!(received_id, session_id);
                 assert_eq!(agent_name, "mock-agent");
+                assert!(model_config.is_none());
             }
             other => panic!("expected SessionCreated, got: {other:?}"),
         }

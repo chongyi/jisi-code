@@ -1,29 +1,34 @@
-use std::path::PathBuf;
+//! WebSocket API 处理器包装。
+//!
+//! 将统一的应用状态适配到 agent_orchestrator 的 WebSocket handler。
+
 use std::sync::Arc;
 
 use axum::extract::State;
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::ws::{WebSocket, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use super::adapter::event_to_server_message;
-use super::protocol::{AgentInfoMessage, ClientMessage, ServerMessage, SessionInfoMessage};
-use crate::orchestrator::Orchestrator;
-use crate::session::SessionId;
+use super::state::AppState;
+use agent_orchestrator::session::SessionId;
+use agent_orchestrator::ws_api::{
+    AgentInfoMessage, ClientMessage, ServerMessage, SessionInfoMessage, event_to_server_message,
+};
+use std::path::PathBuf;
 
-/// Axum WebSocket 升级 handler。
+/// Axum WebSocket 升级 handler，使用统一的 AppState。
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
-    State(orchestrator): State<Arc<Orchestrator>>,
+    State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
     info!("new WebSocket connection request");
-    ws.on_upgrade(move |socket| handle_socket(socket, orchestrator))
+    ws.on_upgrade(move |socket| handle_socket(socket, state.orchestrator.clone()))
 }
 
-async fn handle_socket(socket: WebSocket, orchestrator: Arc<Orchestrator>) {
+async fn handle_socket(socket: WebSocket, orchestrator: Arc<agent_orchestrator::Orchestrator>) {
     let (mut sender, mut receiver) = socket.split();
     let (out_tx, mut out_rx) = mpsc::channel::<ServerMessage>(64);
     info!("WebSocket connection established");
@@ -33,7 +38,11 @@ async fn handle_socket(socket: WebSocket, orchestrator: Arc<Orchestrator>) {
             match serde_json::to_string(&server_msg) {
                 Ok(json) => {
                     info!(payload = %json, "sending WebSocket response");
-                    if sender.send(Message::Text(json.into())).await.is_err() {
+                    if sender
+                        .send(axum::extract::ws::Message::Text(json.into()))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                 }
@@ -71,7 +80,7 @@ async fn handle_socket(socket: WebSocket, orchestrator: Arc<Orchestrator>) {
 
     while let Some(msg) = receiver.next().await {
         match msg {
-            Ok(Message::Text(text)) => {
+            Ok(axum::extract::ws::Message::Text(text)) => {
                 info!(payload = %text, "received WebSocket client message");
                 match serde_json::from_str::<ClientMessage>(&text) {
                     Ok(client_msg) => {
@@ -95,7 +104,7 @@ async fn handle_socket(socket: WebSocket, orchestrator: Arc<Orchestrator>) {
                     }
                 }
             }
-            Ok(Message::Close(_)) => break,
+            Ok(axum::extract::ws::Message::Close(_)) => break,
             Ok(_) => {}
             Err(err) => {
                 warn!(error = %err, "WebSocket receive error");
@@ -114,7 +123,7 @@ async fn handle_socket(socket: WebSocket, orchestrator: Arc<Orchestrator>) {
 }
 
 async fn handle_client_message(
-    orchestrator: &Orchestrator,
+    orchestrator: &agent_orchestrator::Orchestrator,
     msg: ClientMessage,
 ) -> Option<ServerMessage> {
     match msg {
@@ -126,8 +135,6 @@ async fn handle_client_message(
             .create_session(&agent_id, &PathBuf::from(&project_path), model_config)
             .await
         {
-            // SessionCreated is emitted via orchestrator event stream.
-            // Return no direct response to avoid duplicate session_created messages.
             Ok(_) => None,
             Err(err) => Some(ServerMessage::Error {
                 message: format!("create session failed: {err}"),
@@ -161,8 +168,6 @@ async fn handle_client_message(
             };
 
             match orchestrator.close_session(&sid).await {
-                // SessionClosed is emitted via orchestrator event stream.
-                // Return no direct response to avoid duplicate session_closed messages.
                 Ok(()) => None,
                 Err(err) => Some(ServerMessage::Error {
                     message: format!("close session failed: {err}"),

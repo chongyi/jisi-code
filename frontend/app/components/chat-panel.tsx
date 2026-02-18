@@ -1,30 +1,39 @@
-import dayjs from "dayjs";
-import { AlertCircle, Bot, Send, User, Wrench } from "lucide-react";
+import { Bot, Send, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { useWsSend } from "~/components/websocket-provider";
+import { MessageRenderer } from "~/components/message-renderer";
+import { ModelSelector } from "~/components/model-selector";
+import { TokenUsageDisplay } from "~/components/token-usage-display";
 import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Textarea } from "~/components/ui/textarea";
-import { cn } from "~/lib/utils";
+import { useWsSend } from "~/components/websocket-provider";
 import { useSessionStore } from "~/stores/session-store";
-import type { ChatMessage } from "~/types/websocket";
+import type { ChatMessage, ModelConfig } from "~/types/websocket";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 
 export function ChatPanel() {
   const send = useWsSend();
   const connectionStatus = useSessionStore((state) => state.connectionStatus);
+  const agents = useSessionStore((state) => state.agents);
+  const sessions = useSessionStore((state) => state.sessions);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const messages = useSessionStore((state) =>
     state.activeSessionId
       ? state.messages[state.activeSessionId] ?? EMPTY_MESSAGES
       : EMPTY_MESSAGES
   );
+  const activeSessionMetadata = useSessionStore((state) =>
+    state.activeSessionId ? state.sessionMetadata[state.activeSessionId] : undefined
+  );
+  const agentModelConfigs = useSessionStore((state) => state.agentModelConfigs);
   const lastError = useSessionStore((state) => state.lastError);
   const setLastError = useSessionStore((state) => state.setLastError);
   const addUserMessage = useSessionStore((state) => state.addUserMessage);
-  const sessions = useSessionStore((state) => state.sessions);
+  const setSessionModelConfig = useSessionStore((state) => state.setSessionModelConfig);
+  const setAgentModelConfig = useSessionStore((state) => state.setAgentModelConfig);
 
   const [input, setInput] = useState("");
   const viewportHostRef = useRef<HTMLDivElement | null>(null);
@@ -33,10 +42,14 @@ export function ChatPanel() {
     const viewport = viewportHostRef.current?.querySelector<HTMLElement>(
       "[data-slot='scroll-area-viewport']"
     );
-    if (viewport) {
-      viewport.scrollTop = viewport.scrollHeight;
+    if (!viewport) {
+      return;
     }
-  }, [messages.length, activeSessionId]);
+
+    requestAnimationFrame(() => {
+      viewport.scrollTop = viewport.scrollHeight;
+    });
+  }, [messages.length, messages[messages.length - 1]?.content]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -67,14 +80,33 @@ export function ChatPanel() {
     }
   };
 
-  const activeSessionName =
-    sessions.find((session) => session.session_id === activeSessionId)?.agent_name ??
-    "Session";
+  const activeSession = sessions.find(
+    (session) => session.session_id === activeSessionId
+  );
+  const activeAgent = agents.find((agent) => agent.id === activeSession?.agent_name);
+  const activeSessionName = activeAgent?.display_name ?? activeSession?.agent_name ?? "Session";
+  const tokenUsage = activeSessionMetadata?.tokenUsage;
+  const sessionModelConfig = activeSessionMetadata?.modelConfig;
+  const fallbackAgentModelConfig = activeAgent ? agentModelConfigs[activeAgent.id] : undefined;
+
+  const modelConfig = sessionModelConfig ?? fallbackAgentModelConfig ?? null;
+  const handleModelConfigChange = (nextConfig: ModelConfig) => {
+    const normalizedConfig = normalizeModelConfig(nextConfig);
+    if (activeSessionId) {
+      setSessionModelConfig(activeSessionId, normalizedConfig ?? null);
+    }
+    if (activeAgent) {
+      setAgentModelConfig(activeAgent.id, normalizedConfig ?? null);
+    }
+  };
 
   if (!activeSessionId) {
     return (
       <section className="flex flex-1 items-center justify-center p-6">
-        <div className="max-w-md rounded-lg border bg-card p-6 text-center">
+        <div className="max-w-md rounded-xl border bg-card/90 p-6 text-center shadow-sm">
+          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-muted">
+            <Sparkles className="size-5 text-muted-foreground" />
+          </div>
           <p className="text-lg font-semibold">No active session</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Create a new session from the sidebar to start chatting.
@@ -91,92 +123,90 @@ export function ChatPanel() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-center justify-between border-b px-5 py-3">
-        <div>
-          <p className="text-sm font-semibold">{activeSessionName}</p>
-          <p className="text-xs text-muted-foreground">{activeSessionId}</p>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-background/80 px-5 py-3 backdrop-blur-sm">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold">{activeSessionName}</p>
+            {activeSession && (
+              <Badge variant="outline" className="text-[11px]">
+                {activeSession.status}
+              </Badge>
+            )}
+          </div>
+          <p className="truncate text-xs text-muted-foreground">{activeSessionId}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <ModelSelector
+            agent={activeAgent}
+            config={modelConfig}
+            onChange={handleModelConfigChange}
+            disabled={connectionStatus !== "connected"}
+          />
+          <TokenUsageDisplay usage={tokenUsage} />
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 p-4" ref={viewportHostRef}>
-        <ScrollArea className="h-full rounded-lg border bg-background">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4">
+      <div
+        className="min-h-0 flex-1 bg-[radial-gradient(circle_at_top,_hsl(var(--muted)/0.5),_transparent_55%)]"
+        ref={viewportHostRef}
+      >
+        <ScrollArea className="h-full">
+          <div className="mx-auto flex w-full max-w-4xl flex-col gap-2 px-4 py-5 md:px-6">
             {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
+              <MessageRenderer key={message.id} message={message} />
             ))}
             {messages.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground">
-                No messages yet
-              </p>
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-card/50 py-20 text-center">
+                <Bot className="size-12 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  No messages yet. Start the conversation.
+                </p>
+              </div>
             ) : null}
           </div>
         </ScrollArea>
       </div>
 
-      <footer className="border-t p-4">
-        <div className="mx-auto flex w-full max-w-3xl gap-2">
-          <Textarea
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={handleKeyDown}
-            className="min-h-20 resize-none"
-            placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
-            disabled={connectionStatus !== "connected"}
-          />
-          <Button
-            type="button"
-            size="icon"
-            className="self-end"
-            onClick={handleSend}
-            disabled={!input.trim() || connectionStatus !== "connected"}
-          >
-            <Send className="size-4" />
-          </Button>
+      <footer className="border-t bg-background/80 p-4 backdrop-blur-sm">
+        <div className="mx-auto w-full max-w-4xl rounded-xl border bg-card/90 p-3 shadow-sm">
+          <div className="flex gap-2">
+            <Textarea
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={handleKeyDown}
+              className="min-h-24 resize-none"
+              placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
+              disabled={connectionStatus !== "connected"}
+            />
+            <Button
+              type="button"
+              size="icon"
+              className="self-end"
+              onClick={handleSend}
+              disabled={!input.trim() || connectionStatus !== "connected"}
+            >
+              <Send className="size-4" />
+            </Button>
+          </div>
         </div>
       </footer>
     </section>
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
-  const isUser = message.role === "user";
-  const isSystem = message.role === "system";
-  const isToolCall = Boolean(message.toolCall);
+function normalizeModelConfig(
+  config: ModelConfig | null | undefined
+): ModelConfig | undefined {
+  if (!config) {
+    return undefined;
+  }
 
-  return (
-    <article className={cn("flex", isUser ? "justify-end" : "justify-start")}>
-      <div
-        className={cn(
-          "max-w-[88%] rounded-lg border px-3 py-2",
-          isUser && "border-primary/30 bg-primary text-primary-foreground",
-          !isUser && !isSystem && "bg-muted",
-          isSystem && "border-destructive/30 bg-destructive/10 text-destructive",
-          isToolCall && "border-border bg-accent/70"
-        )}
-      >
-        <div className="mb-1 flex items-center gap-1.5 text-xs opacity-75">
-          {isSystem ? (
-            <AlertCircle className="size-3.5" />
-          ) : isUser ? (
-            <User className="size-3.5" />
-          ) : (
-            <Bot className="size-3.5" />
-          )}
-          <span>{isSystem ? "System" : isUser ? "You" : "Assistant"}</span>
-        </div>
-
-        {isToolCall ? (
-          <div className="mb-1 flex items-center gap-1.5 font-mono text-xs">
-            <Wrench className="size-3.5" />
-            <span>{message.toolCall?.tool_name}</span>
-          </div>
-        ) : null}
-
-        <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
-        <p className="mt-1 text-right text-xs opacity-60">
-          {dayjs(message.timestamp).format("HH:mm:ss")}
-        </p>
-      </div>
-    </article>
-  );
+  const normalized: ModelConfig = {};
+  if (config.model) {
+    normalized.model = config.model;
+  }
+  if (config.reasoning_effort) {
+    normalized.reasoning_effort = config.reasoning_effort;
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
 }

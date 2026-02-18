@@ -72,6 +72,38 @@ pub enum SessionStatus {
     Error(String),
 }
 
+/// 会话模型推理强度。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionReasoningEffort {
+    Low,
+    Medium,
+    High,
+}
+
+/// 会话模型配置。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct SessionModelConfig {
+    /// 模型名称（如 "o4-mini"）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// 推理强度（适用于支持推理配置的模型）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<SessionReasoningEffort>,
+}
+
+impl SessionModelConfig {
+    /// 当配置为空时返回 `None`，避免存储空对象。
+    pub fn normalized(self) -> Option<Self> {
+        if self.model.is_none() && self.reasoning_effort.is_none() {
+            None
+        } else {
+            Some(self)
+        }
+    }
+}
+
 /// 会话元数据。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -82,6 +114,9 @@ pub struct Session {
     pub status: SessionStatus,
     /// 关联 Agent 名称。
     pub agent_name: String,
+    /// 会话模型配置（若创建时提供）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_config: Option<SessionModelConfig>,
     /// 会话创建时间（UTC）。
     pub created_at: DateTime<Utc>,
 }
