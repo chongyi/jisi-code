@@ -22,6 +22,7 @@ export function useWebSocket({
   autoConnect = true,
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
+  const socketIdRef = useRef(0);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -35,14 +36,25 @@ export function useWebSocket({
     }
 
     onStatusChange("connecting");
+    socketIdRef.current += 1;
+    const currentSocketId = socketIdRef.current;
     const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
 
     ws.onopen = () => {
+      if (wsRef.current !== ws || socketIdRef.current !== currentSocketId) {
+        return;
+      }
+
       reconnectAttemptsRef.current = 0;
       onStatusChange("connected");
     };
 
     ws.onmessage = (event) => {
+      if (wsRef.current !== ws || socketIdRef.current !== currentSocketId) {
+        return;
+      }
+
       try {
         const message = JSON.parse(event.data) as ServerMessage;
         onMessage(message);
@@ -52,6 +64,10 @@ export function useWebSocket({
     };
 
     ws.onclose = () => {
+      if (wsRef.current !== ws || socketIdRef.current !== currentSocketId) {
+        return;
+      }
+
       onStatusChange("disconnected");
       wsRef.current = null;
 
@@ -62,10 +78,12 @@ export function useWebSocket({
     };
 
     ws.onerror = () => {
+      if (wsRef.current !== ws || socketIdRef.current !== currentSocketId) {
+        return;
+      }
+
       onStatusChange("error");
     };
-
-    wsRef.current = ws;
   }, [onMessage, onStatusChange]);
 
   const disconnect = useCallback(() => {

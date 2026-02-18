@@ -21,6 +21,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const onMessage = useCallback(
     (message: ServerMessage) => {
+      console.log("[WebSocketProvider] received message", message);
       handleServerMessage(message);
     },
     [handleServerMessage]
@@ -28,6 +29,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const onStatusChange = useCallback(
     (status: ConnectionStatus) => {
+      console.log("[WebSocketProvider] status changed", status);
       setConnectionStatus(status);
 
       if (status === "connected") {
@@ -40,12 +42,22 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const { send } = useWebSocket({ onMessage, onStatusChange });
 
+  const sendWithLog = useCallback(
+    (message: ClientMessage) => {
+      console.log("[WebSocketProvider] sending message", message);
+      send(message);
+    },
+    [send]
+  );
+
   useEffect(() => {
-    sendRef.current = send;
-  }, [send]);
+    sendRef.current = sendWithLog;
+  }, [sendWithLog]);
 
   return (
-    <WebSocketContext.Provider value={{ send }}>{children}</WebSocketContext.Provider>
+    <WebSocketContext.Provider value={{ send: sendWithLog }}>
+      {children}
+    </WebSocketContext.Provider>
   );
 }
 

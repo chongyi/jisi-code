@@ -26,11 +26,13 @@ pub async fn websocket_handler(
 async fn handle_socket(socket: WebSocket, orchestrator: Arc<Orchestrator>) {
     let (mut sender, mut receiver) = socket.split();
     let (out_tx, mut out_rx) = mpsc::channel::<ServerMessage>(64);
+    info!("WebSocket connection established");
 
     let writer_task = tokio::spawn(async move {
         while let Some(server_msg) = out_rx.recv().await {
             match serde_json::to_string(&server_msg) {
                 Ok(json) => {
+                    info!(payload = %json, "sending WebSocket response");
                     if sender.send(Message::Text(json.into())).await.is_err() {
                         break;
                     }
@@ -69,25 +71,28 @@ async fn handle_socket(socket: WebSocket, orchestrator: Arc<Orchestrator>) {
 
     while let Some(msg) = receiver.next().await {
         match msg {
-            Ok(Message::Text(text)) => match serde_json::from_str::<ClientMessage>(&text) {
-                Ok(client_msg) => {
-                    let response = handle_client_message(&orchestrator, client_msg).await;
-                    if out_tx.send(response).await.is_err() {
-                        break;
+            Ok(Message::Text(text)) => {
+                info!(payload = %text, "received WebSocket client message");
+                match serde_json::from_str::<ClientMessage>(&text) {
+                    Ok(client_msg) => {
+                        let response = handle_client_message(&orchestrator, client_msg).await;
+                        if out_tx.send(response).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(err) => {
+                        if out_tx
+                            .send(ServerMessage::Error {
+                                message: format!("invalid message: {err}"),
+                            })
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
                     }
                 }
-                Err(err) => {
-                    if out_tx
-                        .send(ServerMessage::Error {
-                            message: format!("invalid message: {err}"),
-                        })
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    }
-                }
-            },
+            }
             Ok(Message::Close(_)) => break,
             Ok(_) => {}
             Err(err) => {
@@ -158,7 +163,9 @@ async fn handle_client_message(orchestrator: &Orchestrator, msg: ClientMessage) 
             }
         }
         ClientMessage::ListAgents => {
+            info!("handling list_agents message");
             let agents = orchestrator.available_agents();
+            info!(count = agents.len(), "prepared agent_list response");
             ServerMessage::AgentList {
                 agents: agents
                     .into_iter()

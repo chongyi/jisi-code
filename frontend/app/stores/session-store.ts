@@ -156,7 +156,9 @@ export const useSessionStore = create<SessionState>()(
             break;
           }
           case "agent_list": {
+            console.log("[SessionStore] received agent_list", message.agents);
             state.agents = message.agents;
+            console.log("[SessionStore] agents updated", state.agents);
             break;
           }
           case "session_list": {
