@@ -4,8 +4,8 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::{
-    AcpExecutor, AgentType, EventBroadcaster, EventStream, Executor, OrchestratorConfig,
-    OrchestratorError, Result, Session, SessionId, SessionManager,
+    AcpExecutor, AgentType, ClaudeSdkExecutor, EventBroadcaster, EventStream, Executor,
+    OrchestratorConfig, OrchestratorError, Result, Session, SessionId, SessionManager,
 };
 
 /// 对外暴露的 Agent 元信息。
@@ -69,6 +69,10 @@ impl Orchestrator {
 
         let executor: Box<dyn Executor> = match agent_config.agent_type {
             AgentType::Acp => Box::new(AcpExecutor::new(
+                agent_config,
+                self.event_broadcaster.clone(),
+            )?),
+            AgentType::ClaudeSdk => Box::new(ClaudeSdkExecutor::new(
                 agent_config,
                 self.event_broadcaster.clone(),
             )?),

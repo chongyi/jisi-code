@@ -8,9 +8,12 @@ use std::path::Path;
 use async_trait::async_trait;
 
 use crate::error::Result;
+use crate::session::SessionId;
 
 /// ACP 执行器实现。
 pub mod acp;
+/// Claude Agent SDK 执行器实现。
+pub mod claude_sdk;
 
 /// 执行器抽象接口。
 ///
@@ -24,6 +27,9 @@ pub trait Executor: Send + Sync {
     ///
     /// 该名称用于日志、诊断和执行器类型识别。
     fn name(&self) -> &str;
+
+    /// 由会话管理器分配并注入统一会话 ID。
+    fn set_session_id(&mut self, _session_id: SessionId) {}
 
     /// 启动执行器。
     ///
@@ -42,3 +48,4 @@ pub trait Executor: Send + Sync {
 }
 
 pub use acp::AcpExecutor;
+pub use claude_sdk::ClaudeSdkExecutor;

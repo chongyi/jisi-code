@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   Loader2,
   Plus,
   RefreshCw,
@@ -6,6 +7,7 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import { useWsSend } from "~/components/websocket-provider";
 import { Badge } from "~/components/ui/badge";
@@ -22,19 +24,75 @@ export function Sidebar() {
   const agents = useSessionStore((state) => state.agents);
   const sessions = useSessionStore((state) => state.sessions);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
+  const creatingSessionAgentId = useSessionStore(
+    (state) => state.creatingSessionAgentId
+  );
+  const lastError = useSessionStore((state) => state.lastError);
   const setActiveSession = useSessionStore((state) => state.setActiveSession);
+  const startCreatingSession = useSessionStore(
+    (state) => state.startCreatingSession
+  );
+  const finishCreatingSession = useSessionStore(
+    (state) => state.finishCreatingSession
+  );
+  const setLastError = useSessionStore((state) => state.setLastError);
+  const createTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (createTimerRef.current) {
+      clearTimeout(createTimerRef.current);
+      createTimerRef.current = null;
+    }
+
+    if (!creatingSessionAgentId) {
+      return;
+    }
+
+    createTimerRef.current = setTimeout(() => {
+      const store = useSessionStore.getState();
+      if (store.creatingSessionAgentId) {
+        store.finishCreatingSession();
+        store.setLastError("Create session timed out. Please retry.");
+      }
+    }, 32000);
+
+    return () => {
+      if (createTimerRef.current) {
+        clearTimeout(createTimerRef.current);
+        createTimerRef.current = null;
+      }
+    };
+  }, [creatingSessionAgentId]);
 
   const handleCreateSession = (agentId: string) => {
-    send({ type: "create_session", agent_id: agentId, project_path: "." });
+    setLastError(null);
+    startCreatingSession(agentId);
+    const sent = send({
+      type: "create_session",
+      agent_id: agentId,
+      project_path: ".",
+    });
+
+    if (!sent) {
+      finishCreatingSession();
+      setLastError("WebSocket is disconnected. Reconnect and try again.");
+    }
   };
 
   const handleCloseSession = (sessionId: string) => {
-    send({ type: "close_session", session_id: sessionId });
+    const sent = send({ type: "close_session", session_id: sessionId });
+    if (!sent) {
+      setLastError("WebSocket is disconnected. Unable to close session.");
+    }
   };
 
   const handleRefresh = () => {
-    send({ type: "list_agents" });
-    send({ type: "list_sessions" });
+    setLastError(null);
+    const sentAgents = send({ type: "list_agents" });
+    const sentSessions = send({ type: "list_sessions" });
+    if (!sentAgents || !sentSessions) {
+      setLastError("WebSocket is disconnected. Unable to refresh.");
+    }
   };
 
   return (
@@ -49,6 +107,15 @@ export function Sidebar() {
       <Separator />
 
       <div className="space-y-3 p-3">
+        {lastError ? (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-xs text-destructive">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              <p className="min-w-0 flex-1 break-words">{lastError}</p>
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">Available Agents</p>
           <Button
@@ -70,10 +137,22 @@ export function Sidebar() {
               size="sm"
               className="w-full justify-start"
               onClick={() => handleCreateSession(agent.id)}
-              disabled={connectionStatus !== "connected" || !agent.enabled}
+              disabled={
+                connectionStatus !== "connected" ||
+                !agent.enabled ||
+                creatingSessionAgentId !== null
+              }
             >
-              <Plus className="size-3.5" />
-              <span className="truncate">{agent.display_name}</span>
+              {creatingSessionAgentId === agent.id ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Plus className="size-3.5" />
+              )}
+              <span className="truncate">
+                {creatingSessionAgentId === agent.id
+                  ? "Creating session..."
+                  : agent.display_name}
+              </span>
             </Button>
           ))}
           {agents.length === 0 ? (
@@ -123,7 +202,10 @@ export function Sidebar() {
                   event.stopPropagation();
                   handleCloseSession(session.session_id);
                 }}
-                disabled={connectionStatus !== "connected"}
+                disabled={
+                  connectionStatus !== "connected" ||
+                  creatingSessionAgentId !== null
+                }
               >
                 <X className="size-3.5" />
               </Button>

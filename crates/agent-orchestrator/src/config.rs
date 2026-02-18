@@ -69,6 +69,9 @@ pub struct EnvVar {
 pub enum AgentType {
     /// ACP（Agent Communication Protocol）类型 Agent。
     Acp,
+    /// Claude Agent SDK（stream-json + control protocol）类型 Agent。
+    #[serde(rename = "claude_sdk")]
+    ClaudeSdk,
     /// Codex 类型 Agent。
     Codex,
     /// OpenCode 类型 Agent。
@@ -105,6 +108,14 @@ key = "CLAUDE_CODE_ENTRYPOINT"
 value = "agent-orchestrator"
 
 [[agents]]
+id = "claude-sdk"
+display_name = "Claude Code SDK"
+type = "claude_sdk"
+command = "claude"
+args = ["-p", "--verbose", "--output-format=stream-json", "--input-format=stream-json"]
+enabled = true
+
+[[agents]]
 id = "codex-default"
 display_name = "Codex CLI"
 type = "codex"
@@ -113,7 +124,7 @@ command = "codex"
 
         let config = OrchestratorConfig::from_str(raw).expect("config should parse");
         assert_eq!(config.event_buffer_size, 2048);
-        assert_eq!(config.agents.len(), 2);
+        assert_eq!(config.agents.len(), 3);
 
         let acp = &config.agents[0];
         assert_eq!(acp.id, "claude-acp");
@@ -126,7 +137,12 @@ command = "codex"
         assert_eq!(acp.env[0].key, "CLAUDE_CODE_ENTRYPOINT");
         assert_eq!(acp.env[0].value, "agent-orchestrator");
 
-        let codex = &config.agents[1];
+        let claude_sdk = &config.agents[1];
+        assert_eq!(claude_sdk.agent_type, AgentType::ClaudeSdk);
+        assert_eq!(claude_sdk.command, "claude");
+        assert_eq!(claude_sdk.args[0], "-p");
+
+        let codex = &config.agents[2];
         assert_eq!(codex.agent_type, AgentType::Codex);
         assert!(codex.args.is_empty());
         assert!(codex.env.is_empty());

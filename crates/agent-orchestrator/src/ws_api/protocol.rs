@@ -11,14 +11,9 @@ pub enum ClientMessage {
         project_path: String,
     },
     /// 向指定会话发送提示词。
-    SendPrompt {
-        session_id: String,
-        prompt: String,
-    },
+    SendPrompt { session_id: String, prompt: String },
     /// 请求关闭指定会话。
-    CloseSession {
-        session_id: String,
-    },
+    CloseSession { session_id: String },
     /// 查询可用 Agent 列表。
     ListAgents,
     /// 查询活跃会话列表。
@@ -35,10 +30,7 @@ pub enum ServerMessage {
         agent_name: String,
     },
     /// 模型增量输出。
-    ContentDelta {
-        session_id: String,
-        content: String,
-    },
+    ContentDelta { session_id: String, content: String },
     /// 工具调用通知。
     ToolCall {
         session_id: String,
@@ -46,25 +38,15 @@ pub enum ServerMessage {
         args: Value,
     },
     /// 会话关闭通知。
-    SessionClosed {
-        session_id: String,
-    },
+    SessionClosed { session_id: String },
     /// 提示词已接收。
-    PromptAccepted {
-        session_id: String,
-    },
+    PromptAccepted { session_id: String },
     /// Agent 列表响应。
-    AgentList {
-        agents: Vec<AgentInfoMessage>,
-    },
+    AgentList { agents: Vec<AgentInfoMessage> },
     /// 会话列表响应。
-    SessionList {
-        sessions: Vec<SessionInfoMessage>,
-    },
+    SessionList { sessions: Vec<SessionInfoMessage> },
     /// 错误消息。
-    Error {
-        message: String,
-    },
+    Error { message: String },
 }
 
 /// Agent 信息（WebSocket 传输用）。

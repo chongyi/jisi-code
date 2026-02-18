@@ -1,13 +1,30 @@
 event_buffer_size = 1000
 
 [[agents]]
-id = "claude-code-acp"
-display_name = "Claude Code (ACP)"
-type = "acp"
+id = "claude-code-sdk"
+display_name = "Claude Code (SDK)"
+type = "claude_sdk"
 command = "claude"
-args = ["agent", "--transport", "stdio"]
+args = [
+  "-p",
+  "--verbose",
+  "--output-format=stream-json",
+  "--input-format=stream-json",
+  "--include-partial-messages",
+  "--replay-user-messages",
+  "--permission-prompt-tool=stdio",
+  "--permission-mode=bypassPermissions",
+]
 enabled = true
 
 [[agents.env]]
 key = "CLAUDE_CODE_ENTRYPOINT"
 value = "agent-orchestrator"
+
+[[agents]]
+id = "mock-acp-local"
+display_name = "Mock ACP (Local Test)"
+type = "acp"
+command = "node"
+args = ["scripts/mock-acp-agent.cjs"]
+enabled = false

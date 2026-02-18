@@ -56,6 +56,10 @@ impl Executor for AcpExecutor {
         &self.name
     }
 
+    fn set_session_id(&mut self, session_id: SessionId) {
+        self.session_id = session_id;
+    }
+
     #[tracing::instrument(skip(self))]
     async fn start(&mut self, project_path: &Path) -> Result<()> {
         info!(

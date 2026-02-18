@@ -39,6 +39,7 @@ impl SessionManager {
         project_path: &Path,
     ) -> Result<Session> {
         let session_id = SessionId::new();
+        executor.set_session_id(session_id.clone());
         executor.start(project_path).await?;
 
         let session = Session {

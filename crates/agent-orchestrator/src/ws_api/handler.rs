@@ -75,8 +75,10 @@ async fn handle_socket(socket: WebSocket, orchestrator: Arc<Orchestrator>) {
                 info!(payload = %text, "received WebSocket client message");
                 match serde_json::from_str::<ClientMessage>(&text) {
                     Ok(client_msg) => {
-                        let response = handle_client_message(&orchestrator, client_msg).await;
-                        if out_tx.send(response).await.is_err() {
+                        if let Some(response) =
+                            handle_client_message(&orchestrator, client_msg).await
+                            && out_tx.send(response).await.is_err()
+                        {
                             break;
                         }
                     }
@@ -111,7 +113,10 @@ async fn handle_socket(socket: WebSocket, orchestrator: Arc<Orchestrator>) {
     info!("WebSocket connection closed");
 }
 
-async fn handle_client_message(orchestrator: &Orchestrator, msg: ClientMessage) -> ServerMessage {
+async fn handle_client_message(
+    orchestrator: &Orchestrator,
+    msg: ClientMessage,
+) -> Option<ServerMessage> {
     match msg {
         ClientMessage::CreateSession {
             agent_id,
@@ -120,53 +125,54 @@ async fn handle_client_message(orchestrator: &Orchestrator, msg: ClientMessage) 
             .create_session(&agent_id, &PathBuf::from(&project_path))
             .await
         {
-            Ok(session) => ServerMessage::SessionCreated {
-                session_id: session.id().to_string(),
-                agent_name: session.agent_name().to_string(),
-            },
-            Err(err) => ServerMessage::Error {
+            // SessionCreated is emitted via orchestrator event stream.
+            // Return no direct response to avoid duplicate session_created messages.
+            Ok(_) => None,
+            Err(err) => Some(ServerMessage::Error {
                 message: format!("create session failed: {err}"),
-            },
+            }),
         },
         ClientMessage::SendPrompt { session_id, prompt } => {
             let sid = match Uuid::parse_str(&session_id) {
                 Ok(uuid) => SessionId::from(uuid),
                 Err(err) => {
-                    return ServerMessage::Error {
+                    return Some(ServerMessage::Error {
                         message: format!("invalid session_id: {err}"),
-                    };
+                    });
                 }
             };
 
             match orchestrator.send_prompt(&sid, &prompt).await {
-                Ok(()) => ServerMessage::PromptAccepted { session_id },
-                Err(err) => ServerMessage::Error {
+                Ok(()) => Some(ServerMessage::PromptAccepted { session_id }),
+                Err(err) => Some(ServerMessage::Error {
                     message: format!("send prompt failed: {err}"),
-                },
+                }),
             }
         }
         ClientMessage::CloseSession { session_id } => {
             let sid = match Uuid::parse_str(&session_id) {
                 Ok(uuid) => SessionId::from(uuid),
                 Err(err) => {
-                    return ServerMessage::Error {
+                    return Some(ServerMessage::Error {
                         message: format!("invalid session_id: {err}"),
-                    };
+                    });
                 }
             };
 
             match orchestrator.close_session(&sid).await {
-                Ok(()) => ServerMessage::SessionClosed { session_id },
-                Err(err) => ServerMessage::Error {
+                // SessionClosed is emitted via orchestrator event stream.
+                // Return no direct response to avoid duplicate session_closed messages.
+                Ok(()) => None,
+                Err(err) => Some(ServerMessage::Error {
                     message: format!("close session failed: {err}"),
-                },
+                }),
             }
         }
         ClientMessage::ListAgents => {
             info!("handling list_agents message");
             let agents = orchestrator.available_agents();
             info!(count = agents.len(), "prepared agent_list response");
-            ServerMessage::AgentList {
+            Some(ServerMessage::AgentList {
                 agents: agents
                     .into_iter()
                     .map(|agent| AgentInfoMessage {
@@ -176,11 +182,11 @@ async fn handle_client_message(orchestrator: &Orchestrator, msg: ClientMessage) 
                         enabled: agent.enabled,
                     })
                     .collect(),
-            }
+            })
         }
         ClientMessage::ListSessions => {
             let sessions = orchestrator.active_sessions().await;
-            ServerMessage::SessionList {
+            Some(ServerMessage::SessionList {
                 sessions: sessions
                     .into_iter()
                     .map(|session| SessionInfoMessage {
@@ -189,7 +195,7 @@ async fn handle_client_message(orchestrator: &Orchestrator, msg: ClientMessage) 
                         status: format!("{:?}", session.status()),
                     })
                     .collect(),
-            }
+            })
         }
     }
 }

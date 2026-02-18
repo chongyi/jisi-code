@@ -1,11 +1,11 @@
 # agent-orchestrator
 
-`agent-orchestrator` 是一个面向 AI 编码工具的统一编排模块，提供一致的会话管理、消息转发与事件分发能力。该 crate 目标是将不同 Agent（当前已支持 ACP/Claude Code）收敛到同一套异步接口，降低上层集成复杂度。
+`agent-orchestrator` 是一个面向 AI 编码工具的统一编排模块，提供一致的会话管理、消息转发与事件分发能力。该 crate 目标是将不同 Agent（当前已支持 Claude Agent SDK）收敛到同一套异步接口，降低上层集成复杂度。
 
 ## 功能特性
 
 - 统一的 Agent 管理接口：通过 `Orchestrator` 对外暴露一致的会话与消息 API。
-- ACP 协议支持（Claude Code）：内置 `AcpExecutor`，可通过 stdio 与 Claude Code Agent 通信。
+- Claude Agent SDK 支持：内置 `ClaudeSdkExecutor`，通过 `stream-json + control protocol` 与 Claude Code CLI 通信。
 - 基于配置文件的 Agent 管理：使用 `agents.toml` 声明 Agent 列表、命令参数、环境变量与启用状态。
 - 事件驱动的异步架构：基于广播事件流，支持多订阅者消费会话事件。
 - 会话生命周期管理：覆盖会话创建、消息发送、错误上报与关闭。
@@ -15,22 +15,39 @@
 
 ### 1) 配置 `agents.toml`
 
-以下示例与项目根目录当前配置保持一致（`claude` 参数为 `agent --transport stdio`）：
+以下示例与项目根目录当前配置保持一致（默认启用 Claude Agent SDK 模式）：
 
 ```toml
 event_buffer_size = 1000
 
 [[agents]]
-id = "claude-code-acp"
-display_name = "Claude Code (ACP)"
-type = "acp"
+id = "claude-code-sdk"
+display_name = "Claude Code (SDK)"
+type = "claude_sdk"
 command = "claude"
-args = ["agent", "--transport", "stdio"]
+args = [
+  "-p",
+  "--verbose",
+  "--output-format=stream-json",
+  "--input-format=stream-json",
+  "--include-partial-messages",
+  "--replay-user-messages",
+  "--permission-prompt-tool=stdio",
+  "--permission-mode=bypassPermissions",
+]
 enabled = true
 
 [[agents.env]]
 key = "CLAUDE_CODE_ENTRYPOINT"
 value = "agent-orchestrator"
+
+[[agents]]
+id = "mock-acp-local"
+display_name = "Mock ACP (Local Test)"
+type = "acp"
+command = "node"
+args = ["scripts/mock-acp-agent.cjs"]
+enabled = false
 ```
 
 ### 2) 使用示例
@@ -53,7 +70,7 @@ async fn main() -> Result<()> {
 
     // 创建会话
     let session = orchestrator
-        .create_session("claude-code-acp", Path::new("."))
+        .create_session("claude-code-sdk", Path::new("."))
         .await?;
 
     // 发送提示词
@@ -171,7 +188,8 @@ async fn main() -> Result<()> {
 - `AgentConfig`
   - `id`, `display_name`, `type`, `command`, `args`, `env`, `enabled`
 - `AgentType`
-  - `acp`（已支持）
+- `claude_sdk`（已支持）
+- `acp`（可用于支持 ACP 的 Agent）
   - `codex`（预留）
   - `opencode`（预留）
 
@@ -203,7 +221,7 @@ cargo clippy -p agent-orchestrator --all-targets -- -D warnings
 - Phase 1：已完成
   - 基础编排器 API
   - 会话管理
-  - ACP（Claude Code）执行器
+  - Claude SDK 执行器
   - 事件系统
 - Phase 2：计划中
   - WebSocket API

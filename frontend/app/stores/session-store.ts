@@ -14,11 +14,16 @@ interface SessionState {
   agents: AgentInfo[];
   sessions: SessionInfo[];
   activeSessionId: string | null;
+  creatingSessionAgentId: string | null;
+  lastError: string | null;
   messages: Record<string, ChatMessage[]>;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setAgents: (agents: AgentInfo[]) => void;
   setSessions: (sessions: SessionInfo[]) => void;
   setActiveSession: (sessionId: string | null) => void;
+  startCreatingSession: (agentId: string) => void;
+  finishCreatingSession: () => void;
+  setLastError: (message: string | null) => void;
   addUserMessage: (sessionId: string, content: string) => void;
   handleServerMessage: (message: ServerMessage) => void;
   removeSession: (sessionId: string) => void;
@@ -37,6 +42,8 @@ export const useSessionStore = create<SessionState>()(
     agents: [],
     sessions: [],
     activeSessionId: null,
+    creatingSessionAgentId: null,
+    lastError: null,
     messages: {},
 
     setConnectionStatus: (status) =>
@@ -65,6 +72,21 @@ export const useSessionStore = create<SessionState>()(
         state.activeSessionId = sessionId;
       }),
 
+    startCreatingSession: (agentId) =>
+      set((state) => {
+        state.creatingSessionAgentId = agentId;
+      }),
+
+    finishCreatingSession: () =>
+      set((state) => {
+        state.creatingSessionAgentId = null;
+      }),
+
+    setLastError: (message) =>
+      set((state) => {
+        state.lastError = message;
+      }),
+
     addUserMessage: (sessionId, content) =>
       set((state) => {
         if (!state.messages[sessionId]) {
@@ -83,6 +105,8 @@ export const useSessionStore = create<SessionState>()(
       set((state) => {
         switch (message.type) {
           case "session_created": {
+            state.creatingSessionAgentId = null;
+            state.lastError = null;
             state.messages[message.session_id] ??= [];
             state.sessions.push({
               session_id: message.session_id,
@@ -156,9 +180,7 @@ export const useSessionStore = create<SessionState>()(
             break;
           }
           case "agent_list": {
-            console.log("[SessionStore] received agent_list", message.agents);
             state.agents = message.agents;
-            console.log("[SessionStore] agents updated", state.agents);
             break;
           }
           case "session_list": {
@@ -169,17 +191,18 @@ export const useSessionStore = create<SessionState>()(
             break;
           }
           case "error": {
-            if (!state.activeSessionId) {
-              break;
-            }
+            state.creatingSessionAgentId = null;
+            state.lastError = message.message;
 
-            state.messages[state.activeSessionId] ??= [];
-            state.messages[state.activeSessionId].push({
-              id: nextMessageId(),
-              role: "system",
-              content: message.message,
-              timestamp: Date.now(),
-            });
+            if (state.activeSessionId) {
+              state.messages[state.activeSessionId] ??= [];
+              state.messages[state.activeSessionId].push({
+                id: nextMessageId(),
+                role: "system",
+                content: message.message,
+                timestamp: Date.now(),
+              });
+            }
             break;
           }
         }

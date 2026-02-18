@@ -97,13 +97,14 @@ export function useWebSocket({
     wsRef.current = null;
   }, []);
 
-  const send = useCallback((message: ClientMessage) => {
+  const send = useCallback((message: ClientMessage): boolean => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
-      return;
+      return true;
     }
 
     console.warn("WebSocket is not connected");
+    return false;
   }, []);
 
   useEffect(() => {

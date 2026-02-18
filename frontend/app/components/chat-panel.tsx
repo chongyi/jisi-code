@@ -21,11 +21,12 @@ export function ChatPanel() {
       ? state.messages[state.activeSessionId] ?? EMPTY_MESSAGES
       : EMPTY_MESSAGES
   );
+  const lastError = useSessionStore((state) => state.lastError);
+  const setLastError = useSessionStore((state) => state.setLastError);
   const addUserMessage = useSessionStore((state) => state.addUserMessage);
   const sessions = useSessionStore((state) => state.sessions);
 
   const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
   const viewportHostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -43,11 +44,20 @@ export function ChatPanel() {
       return;
     }
 
-    setSending(true);
+    setLastError(null);
     addUserMessage(activeSessionId, text);
-    send({ type: "send_prompt", session_id: activeSessionId, prompt: text });
-    setInput("");
-    setSending(false);
+    const sent = send({
+      type: "send_prompt",
+      session_id: activeSessionId,
+      prompt: text,
+    });
+
+    if (sent) {
+      setInput("");
+      return;
+    }
+
+    setLastError("WebSocket is disconnected. Unable to send prompt.");
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -69,6 +79,11 @@ export function ChatPanel() {
           <p className="mt-1 text-sm text-muted-foreground">
             Create a new session from the sidebar to start chatting.
           </p>
+          {lastError ? (
+            <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-left text-xs text-destructive">
+              {lastError}
+            </p>
+          ) : null}
         </div>
       </section>
     );
@@ -113,9 +128,7 @@ export function ChatPanel() {
             size="icon"
             className="self-end"
             onClick={handleSend}
-            disabled={
-              !input.trim() || connectionStatus !== "connected" || sending
-            }
+            disabled={!input.trim() || connectionStatus !== "connected"}
           >
             <Send className="size-4" />
           </Button>

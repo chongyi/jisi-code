@@ -109,7 +109,7 @@ async fn test_session_not_found() {
 }
 
 #[tokio::test]
-#[ignore = "requires local Claude Code ACP process"]
+#[ignore = "requires local Claude Code SDK process"]
 async fn test_full_workflow() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let config_path = manifest_dir.join("../../agents.toml");
@@ -120,7 +120,7 @@ async fn test_full_workflow() {
 
     let mut events = orchestrator.subscribe_events();
     let session = orchestrator
-        .create_session("claude-code-acp", &manifest_dir)
+        .create_session("claude-code-sdk", &manifest_dir)
         .await
         .expect("session should be created");
 

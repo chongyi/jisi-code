@@ -146,19 +146,23 @@ impl AcpClient {
                 Ok(Some(line)) => line,
                 Ok(None) => {
                     let exit_info = Self::process_exit_info(&process).await;
+                    let reason = format!("ACP process terminated: {exit_info}");
                     event_tx.emit(OrchestratorEvent::SessionError {
                         session_id: session_id.clone(),
-                        error: format!("ACP process terminated: {exit_info}"),
+                        error: reason.clone(),
                     });
+                    Self::fail_pending_requests(&pending_requests, &reason).await;
                     break;
                 }
                 Err(err) => {
                     let exit_info = Self::process_exit_info(&process).await;
+                    let reason = format!("failed to read ACP process output: {err}; {exit_info}");
                     warn!(error = %err, "failed to read ACP process output");
                     event_tx.emit(OrchestratorEvent::SessionError {
                         session_id: session_id.clone(),
-                        error: format!("failed to read ACP process output: {err}; {exit_info}"),
+                        error: reason.clone(),
                     });
+                    Self::fail_pending_requests(&pending_requests, &reason).await;
                     break;
                 }
             };
@@ -174,6 +178,26 @@ impl AcpClient {
             }
 
             warn!(line = %line, "received unrecognized ACP payload");
+        }
+    }
+
+    async fn fail_pending_requests(
+        pending_requests: &Arc<RwLock<HashMap<u64, oneshot::Sender<JsonRpcResponse>>>>,
+        reason: &str,
+    ) {
+        let mut pending = pending_requests.write().await;
+        for (request_id, tx) in pending.drain() {
+            let response = JsonRpcResponse {
+                jsonrpc: "2.0".to_string(),
+                id: request_id,
+                result: None,
+                error: Some(crate::executor::acp::protocol::JsonRpcError {
+                    code: -32000,
+                    message: reason.to_string(),
+                    data: None,
+                }),
+            };
+            let _ = tx.send(response);
         }
     }
 

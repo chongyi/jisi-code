@@ -9,7 +9,7 @@ import type {
 } from "~/types/websocket";
 
 interface WebSocketContextValue {
-  send: (message: ClientMessage) => void;
+  send: (message: ClientMessage) => boolean;
 }
 
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
@@ -17,11 +17,10 @@ const WebSocketContext = createContext<WebSocketContextValue | null>(null);
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const handleServerMessage = useSessionStore((state) => state.handleServerMessage);
   const setConnectionStatus = useSessionStore((state) => state.setConnectionStatus);
-  const sendRef = useRef<(message: ClientMessage) => void>(() => {});
+  const sendRef = useRef<(message: ClientMessage) => boolean>(() => false);
 
   const onMessage = useCallback(
     (message: ServerMessage) => {
-      console.log("[WebSocketProvider] received message", message);
       handleServerMessage(message);
     },
     [handleServerMessage]
@@ -29,7 +28,6 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const onStatusChange = useCallback(
     (status: ConnectionStatus) => {
-      console.log("[WebSocketProvider] status changed", status);
       setConnectionStatus(status);
 
       if (status === "connected") {
@@ -44,8 +42,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const sendWithLog = useCallback(
     (message: ClientMessage) => {
-      console.log("[WebSocketProvider] sending message", message);
-      send(message);
+      return send(message);
     },
     [send]
   );

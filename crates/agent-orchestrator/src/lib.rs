@@ -23,6 +23,6 @@ pub mod ws_api;
 pub use config::{AgentConfig, AgentType, EnvVar, OrchestratorConfig};
 pub use error::{OrchestratorError, Result};
 pub use events::{EventBroadcaster, EventStream, OrchestratorEvent};
-pub use executor::{AcpExecutor, Executor};
+pub use executor::{AcpExecutor, ClaudeSdkExecutor, Executor};
 pub use orchestrator::{AgentInfo, Orchestrator};
 pub use session::{Session, SessionId, SessionManager, SessionStatus};
